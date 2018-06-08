@@ -277,7 +277,7 @@ runStereoEqualizer(LADSPA_Handle Instance,
   unsigned long lSampleIndex;
   
  
-  static char param_name[100] = "/data/cfg/Para_";//"/data/Para.bin";
+  static char param_name[100] = "/data/cfg/eq_bin/Para_";//"/data/Para.bin";
   char samp_name[10];
   unsigned int samplerate;
   int pcm_channel = 2;
