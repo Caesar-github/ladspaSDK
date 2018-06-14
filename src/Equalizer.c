@@ -185,13 +185,14 @@ runMonoEqualizer(LADSPA_Handle Instance,
   Equalizer * psEqualizer;
  // unsigned long lSampleIndex;
 
-  static char param_name[100] = "/data/cfg/Para_";//"/data/Para.bin";
+  static char param_name[100] = "/data/cfg/eq_bin/Para_";//"/data/Para.bin";
   char samp_name[10];
   unsigned int samplerate;
   int pcm_channel = 1;
 
   float reset_para[PARALEN] = {0};
   FILE *fp = NULL;
+  FILE *binFile = NULL;
   
 
   psEqualizer = (Equalizer *)Instance;
@@ -205,11 +206,26 @@ if(psEqualizer->m_eqfirstRun == 0)
 {
     psEqualizer->m_eqfirstRun = 1;
     samplerate = psEqualizer->m_eqsampleRate;
+    if((samplerate != 48000)&&(samplerate != 44100) &&(samplerate != 32000)
+        &&(samplerate != 16000) && (samplerate != 8000))
+    {
+        printf("Unsupport samplerate!\n");
+        return ;     
+    }
 
     rk_itoa(samplerate,samp_name,10);
     strcat(param_name,samp_name);
 	strcat(param_name,"Hz_1ch.bin");
     //printf("para_name  = %s\n",param_name);
+
+    binFile = fopen(param_name,"rb");
+    if((binFile == NULL))
+    {
+        system("cp /usr/lib/eq_bin/ /data/cfg/ -rf");
+        printf("copy eq_bin success!!!\n");
+    }
+    else 
+        fclose(binFile);
     
 	AudioPost_Init(param_name, SampleCount);
 
@@ -284,6 +300,7 @@ runStereoEqualizer(LADSPA_Handle Instance,
 
   float reset_para[PARALEN] = {0};
   FILE *fp = NULL;
+  FILE *binFile = NULL;
   
   psEqualizer = (Equalizer *)Instance;
 
@@ -294,11 +311,29 @@ if(psEqualizer->m_eqfirstRun == 0)
 {
     psEqualizer->m_eqfirstRun = 1;
     samplerate = psEqualizer->m_eqsampleRate;
+    if((samplerate != 48000)&&(samplerate != 44100) &&(samplerate != 32000)
+        &&(samplerate != 16000) && (samplerate != 8000))
+    {
+        printf("Unsupport samplerate!\n");
+        return ;     
+    }
+        
 
     rk_itoa(samplerate,samp_name,10);
     strcat(param_name,samp_name);
 	strcat(param_name,"Hz_2ch.bin");
    // printf("para_name  = %s\n",param_name);
+
+    //detect eq_bin file
+    binFile = fopen(param_name,"rb");
+    if((binFile == NULL))
+    {
+        system("cp /usr/lib/eq_bin/ /data/cfg/ -rf");
+         printf("copy eq_bin...\n");
+    }
+    else      
+        fclose(binFile);
+        
     
 	AudioPost_Init(param_name, SampleCount);
 
