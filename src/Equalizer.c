@@ -112,6 +112,7 @@ instantiateEqualizer(const LADSPA_Descriptor * Descriptor,
 		     unsigned long             SampleRate) {
   Equalizer * psEqualizer;
   
+  printf("============EQ/DRC Vesion 1.2==================\n");
   psEqualizer = (Equalizer *)malloc(sizeof(Equalizer));
   
   //printf("-------instantiateEqualizer-----\n");
@@ -433,6 +434,8 @@ fwrite(pfOutput,sizeof(LADSPA_Data),2*SampleCount,psEqualizer->fp_out);
   for (lSampleIndex = 0; lSampleIndex < SampleCount; lSampleIndex++) 
     *(pfOutput++) = *(pfInput++);
 #endif
+free(pfInput);
+free(pfOutput);
 }
 
 
