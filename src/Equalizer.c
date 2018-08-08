@@ -107,19 +107,16 @@ static char* rk_itoa(int val, char* dst, int radix)
 /*****************************************************************************/
 
 /* Construct a new plugin instance. */
-LADSPA_Handle 
+LADSPA_Handle
 instantiateEqualizer(const LADSPA_Descriptor * Descriptor,
 		     unsigned long             SampleRate) {
   Equalizer * psEqualizer;
-  
-  printf("============EQ/DRC Vesion 1.2==================\n");
+
+  printf("============EQ/DRC Version 1.21==================\n");
   psEqualizer = (Equalizer *)malloc(sizeof(Equalizer));
-  
-  //printf("-------instantiateEqualizer-----\n");
   psEqualizer->m_eqsampleRate = (unsigned int)SampleRate;
 
   return psEqualizer;
-  
 }
 
 
@@ -211,13 +208,14 @@ if(psEqualizer->m_eqfirstRun == 0)
         &&(samplerate != 16000) && (samplerate != 8000))
     {
         printf("Unsupport samplerate!\n");
-        return ;     
+        return ;
     }
 
+    strcpy(param_name,"/data/cfg/eq_bin/Para_");
     rk_itoa(samplerate,samp_name,10);
     strcat(param_name,samp_name);
 	strcat(param_name,"Hz_1ch.bin");
-    //printf("para_name  = %s\n",param_name);
+    printf("para_name  = %s\n",param_name);
 
     binFile = fopen(param_name,"rb");
     if((binFile == NULL))
@@ -225,15 +223,18 @@ if(psEqualizer->m_eqfirstRun == 0)
         system("cp /usr/lib/eq_bin/ /data/cfg/ -rf");
         printf("copy eq_bin success!!!\n");
     }
-    else 
+    else
+    {
         fclose(binFile);
-    
+    }
+
+
 	AudioPost_Init(param_name, SampleCount);
 
 	#ifdef EQ_DRC_PARAM_DEBUG_
     psEqualizer->filename = param_name;//"/data/Para.bin";
    // printf("filename = %s\n",psEqualizer->filename);
-   
+
 	psEqualizer->fd = inotify_init();
 	//printf("psEqualizer->fd = %d\n",psEqualizer->fd);
 #endif
@@ -273,28 +274,27 @@ if(psEqualizer->m_eqfirstRun == 0)
         inotify_rm_watch (psEqualizer->fd, psEqualizer->wd);//删除监视
         psEqualizer->fd = inotify_init();//重新初始化监视
     }
-       
+  
 #endif
 
 /***********************this part must be changed*****/
-  
+
 }
 
 /*****************************************************************************/
 
 /*****************************************************************************/
 
-void 
-runStereoEqualizer(LADSPA_Handle Instance,
+void runStereoEqualizer(LADSPA_Handle Instance,
 		   unsigned long SampleCount) {
-  
+
   LADSPA_Data * pfInput;
   LADSPA_Data * pfOutput;
   Equalizer * psEqualizer;
   unsigned long lSampleIndex;
-  
- 
-  static char param_name[100] = "/data/cfg/eq_bin/Para_";//"/data/Para.bin";
+
+
+  static char param_name[100] =  "/data/cfg/eq_bin/Para_";//"/data/Para.bin";
   char samp_name[10];
   unsigned int samplerate;
   int pcm_channel = 2;
@@ -302,9 +302,8 @@ runStereoEqualizer(LADSPA_Handle Instance,
   float reset_para[PARALEN] = {0};
   FILE *fp = NULL;
   FILE *binFile = NULL;
-  
-  psEqualizer = (Equalizer *)Instance;
 
+  psEqualizer = (Equalizer *)Instance;
 /******************************init****************************/
 /* eq_drc init because the samplecount only be passed in this*/
 
@@ -316,14 +315,14 @@ if(psEqualizer->m_eqfirstRun == 0)
         &&(samplerate != 16000) && (samplerate != 8000))
     {
         printf("Unsupport samplerate!\n");
-        return ;     
+        return ;
     }
-        
 
+    strcpy(param_name,"/data/cfg/eq_bin/Para_");
     rk_itoa(samplerate,samp_name,10);
     strcat(param_name,samp_name);
 	strcat(param_name,"Hz_2ch.bin");
-   // printf("para_name  = %s\n",param_name);
+    printf("para_name  = %s\n",param_name);
 
     //detect eq_bin file
     binFile = fopen(param_name,"rb");
@@ -332,16 +331,15 @@ if(psEqualizer->m_eqfirstRun == 0)
         system("cp /usr/lib/eq_bin/ /data/cfg/ -rf");
          printf("copy eq_bin...\n");
     }
-    else      
+    else {
         fclose(binFile);
-        
-    
+    }
 	AudioPost_Init(param_name, SampleCount);
 
 #ifdef EQ_DRC_PARAM_DEBUG_
-    psEqualizer->filename = param_name;//"/data/Para.bin";
+    psEqualizer->filename = param_name;
    // printf("filename = %s\n",psEqualizer->filename);
-   
+
 	psEqualizer->fd = inotify_init();
 	//printf("psEqualizer->fd = %d\n",psEqualizer->fd);
 #endif
@@ -366,7 +364,7 @@ if(psEqualizer->m_eqfirstRun == 0)
     #else
     pfInput[lSampleIndex] = psEqualizer->m_leftInputBuffer[lSampleIndex/2];
     pfInput[lSampleIndex + 1] = psEqualizer->m_rightInputBuffer[lSampleIndex/2];
-     //printf("*(pfInput) = %f %f\n",(pfInput[lSampleIndex]),pfInput[lSampleIndex + 1]);
+    //printf("*(pfInput) = %f %f\n",(pfInput[lSampleIndex]),pfInput[lSampleIndex + 1]);
     #endif
 }
 
@@ -375,7 +373,7 @@ AudioPost_Process(pfInput, pfOutput, pcm_channel, SampleCount);
 fwrite(pfInput,sizeof(LADSPA_Data),2*SampleCount,psEqualizer->fp_in);
 fwrite(pfOutput,sizeof(LADSPA_Data),2*SampleCount,psEqualizer->fp_out);
 #endif
- for (lSampleIndex = 0; lSampleIndex <2 * SampleCount; lSampleIndex = lSampleIndex + 2) 
+ for (lSampleIndex = 0; lSampleIndex <2 * SampleCount; lSampleIndex = lSampleIndex + 2)
 {
 #if 0
      //printf("*(pfOutput) = %f\n",*(pfOutput));
@@ -385,7 +383,7 @@ fwrite(pfOutput,sizeof(LADSPA_Data),2*SampleCount,psEqualizer->fp_out);
      #else
      psEqualizer->m_leftOutputBuffer[lSampleIndex/2] = pfOutput[lSampleIndex];
      psEqualizer->m_rightOutputBuffer[lSampleIndex/2] = pfOutput[lSampleIndex +1];
-    
+ 
      #endif
 }
 
@@ -443,23 +441,26 @@ free(pfOutput);
 /*****************************************************************************/
 
 /* Throw away a simple delay line. */
-void 
-cleanupEqualizer(LADSPA_Handle Instance) {
+void cleanupEqualizer(LADSPA_Handle Instance) {
 
 /****************Equalizer deinit*************************/
   Equalizer * psEqualizer;
   psEqualizer = (Equalizer *)Instance;
 
-  AudioPost_Destroy();
-
   #ifdef DEBUG_
   fclose(psEqualizer->fp_in);
   fclose(psEqualizer->fp_out);
   #endif
-  
+
   #ifdef EQ_DRC_PARAM_DEBUG_
     inotify_rm_watch (psEqualizer->fd, psEqualizer->wd);
   #endif
+
+  if(psEqualizer->m_eqfirstRun == 1)
+  {
+       AudioPost_Destroy();
+       psEqualizer->m_eqfirstRun = 0;
+  }
 
   free(Instance);
 }
