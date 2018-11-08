@@ -28,7 +28,7 @@
 /************ EQ_DRC param debug**********/
 
 #define EQ_DRC_PARAM_DEBUG_
-//#define DEBUG_
+#define DEBUG_
 
 /*****************************************************************************/
 
@@ -112,7 +112,7 @@ instantiateEqualizer(const LADSPA_Descriptor * Descriptor,
 		     unsigned long             SampleRate) {
   Equalizer * psEqualizer;
 
-  printf("============EQ/DRC Version 1.21==================\n");
+  printf("============EQ/DRC Version 1.21 test==================\n");
   psEqualizer = (Equalizer *)malloc(sizeof(Equalizer));
   psEqualizer->m_eqsampleRate = (unsigned int)SampleRate;
 
@@ -181,7 +181,7 @@ runMonoEqualizer(LADSPA_Handle Instance,
   LADSPA_Data * pfInput;
   LADSPA_Data * pfOutput;
   Equalizer * psEqualizer;
- // unsigned long lSampleIndex;
+  unsigned long lSampleIndex;
 
   static char param_name[100] = "/data/cfg/eq_bin/Para_";//"/data/Para.bin";
   char samp_name[10];
@@ -241,11 +241,23 @@ if(psEqualizer->m_eqfirstRun == 0)
 }
 /**************************process*********************************/
 
+for (lSampleIndex = 0; lSampleIndex <2 * SampleCount; lSampleIndex = lSampleIndex + 2) 
+{
+    pfInput[lSampleIndex] = pfInput[lSampleIndex] * 32767.0;
+}
+
   AudioPost_Process(pfInput, pfOutput , pcm_channel, SampleCount);
 #ifdef DEBUG_
  fwrite(pfInput,sizeof(LADSPA_Data),SampleCount,psEqualizer->fp_in);
  fwrite(pfOutput,sizeof(LADSPA_Data),SampleCount,psEqualizer->fp_out);
 #endif
+
+for (lSampleIndex = 0; lSampleIndex <2 * SampleCount; lSampleIndex = lSampleIndex + 2) 
+  {
+      pfOutput[lSampleIndex] = pfOutput[lSampleIndex] / 32767.0;
+  }
+
+
   /*momitor bin-file was change only debug*/
 #ifdef EQ_DRC_PARAM_DEBUG_
    /*adding the "/data/rpc-d/" directory into watch list. 
@@ -362,17 +374,14 @@ if(psEqualizer->m_eqfirstRun == 0)
     *(pfInput++) =  *(psEqualizer->m_rightInputBuffer);
     psEqualizer->m_rightInputBuffer ++;
     #else
-    pfInput[lSampleIndex] = psEqualizer->m_leftInputBuffer[lSampleIndex/2];
-    pfInput[lSampleIndex + 1] = psEqualizer->m_rightInputBuffer[lSampleIndex/2];
+    pfInput[lSampleIndex] = psEqualizer->m_leftInputBuffer[lSampleIndex/2] * 32767.0;
+    pfInput[lSampleIndex + 1] = psEqualizer->m_rightInputBuffer[lSampleIndex/2] * 32767.0;
     //printf("*(pfInput) = %f %f\n",(pfInput[lSampleIndex]),pfInput[lSampleIndex + 1]);
     #endif
 }
 
 AudioPost_Process(pfInput, pfOutput, pcm_channel, SampleCount);
-#ifdef DEBUG_
-fwrite(pfInput,sizeof(LADSPA_Data),2*SampleCount,psEqualizer->fp_in);
-fwrite(pfOutput,sizeof(LADSPA_Data),2*SampleCount,psEqualizer->fp_out);
-#endif
+
  for (lSampleIndex = 0; lSampleIndex <2 * SampleCount; lSampleIndex = lSampleIndex + 2)
 {
 #if 0
@@ -380,12 +389,26 @@ fwrite(pfOutput,sizeof(LADSPA_Data),2*SampleCount,psEqualizer->fp_out);
      *(psEqualizer->m_leftInputBuffer ++) = *(pfOutput++);
    // printf("*(pfOutput) = %f\n",*(pfOutput));
      *(psEqualizer->m_rightInputBuffer ++) = *(pfOutput++);
-     #else
-     psEqualizer->m_leftOutputBuffer[lSampleIndex/2] = pfOutput[lSampleIndex];
-     psEqualizer->m_rightOutputBuffer[lSampleIndex/2] = pfOutput[lSampleIndex +1];
+ #else
+     psEqualizer->m_leftOutputBuffer[lSampleIndex/2] = pfOutput[lSampleIndex] / 32767.0;
+     psEqualizer->m_rightOutputBuffer[lSampleIndex/2] = pfOutput[lSampleIndex +1] / 32767.0;
  
-     #endif
+ #endif
 }
+
+#ifdef DEBUG_
+  for (lSampleIndex = 0; lSampleIndex <2 * SampleCount; lSampleIndex = lSampleIndex + 2) 
+ {
+     pfInput[lSampleIndex] = pfInput[lSampleIndex] / 32767.0;
+     pfInput[lSampleIndex + 1] = pfInput[lSampleIndex +1] / 32767.0;
+     pfOutput[lSampleIndex] = pfOutput[lSampleIndex] / 32767.0;
+     pfOutput[lSampleIndex + 1] = pfOutput[lSampleIndex + 1] / 32767.0;
+     //printf("*(pfInput) = %f %f\n",(pfInput[lSampleIndex]),pfInput[lSampleIndex + 1]);
+ }
+ 
+ fwrite(pfInput,sizeof(LADSPA_Data),2*SampleCount,psEqualizer->fp_in);
+ fwrite(pfOutput,sizeof(LADSPA_Data),2*SampleCount,psEqualizer->fp_out);
+#endif
 
 
 #ifdef EQ_DRC_PARAM_DEBUG_
