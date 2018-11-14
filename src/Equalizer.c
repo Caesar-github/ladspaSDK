@@ -28,7 +28,7 @@
 /************ EQ_DRC param debug**********/
 
 #define EQ_DRC_PARAM_DEBUG_
-#define DEBUG_
+//#define DEBUG_
 
 /*****************************************************************************/
 
