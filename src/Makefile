@@ -8,25 +8,24 @@
 #
 # GENERAL
 #
+PROJECT_DIR := $(shell pwd)
+#PROM    = alsa_ladspa
 
 INCLUDES	=	-I.
 LIBRARIES	=	-ldl -lm
-CFLAGS		=	$(INCLUDES) -Wall  -O3
-LOCAL_LDFLAGS   =      -L./ -lRK_AudioProcess 
+CFLAGS		=	$(INCLUDES) -Wall  #-O3
+LOCAL_LDFLAGS   =      -L./$(LADSPA_PATH) -lRK_AudioProcess
 CXXFLAGS	=	$(CFLAGS)
-PLUGINS		=	./Equalizer.so
-CC		=	../../../buildroot/output/rockchip_rk3308_release/host/usr/bin/aarch64-rockchip-linux-gnu-gcc
-CPP		=	../../../buildroot/output/rockchip_rk3308_release/host/usr/bin/aarch64-rockchip-linux-gnu-g++
-LD		=	../../../buildroot/output/rockchip_rk3308_release/host/usr/bin/aarch64-rockchip-linux-gnu-ld
+PLUGINS		:=	./$(LADSPA_PATH)/rk_DCBDoingc.so ./$(LADSPA_PATH)/Equalizer.so
 
 ###############################################################################
 #
 # RULES TO BUILD PLUGINS FROM C OR C++ CODE
 #
 
-./%.so:	%.c ladspa.h
+./$(LADSPA_PATH)/%.so:	%.c ladspa.h
 	$(CC) $(CFLAGS) -o ./$*.o -c -fPIC ./$*.c
-	$(LD) -o ./$*.so ./$*.o -shared $(LOCAL_LDFLAGS)
+	$(LD) -o ./$(LADSPA_PATH)/$*.so ./$*.o -shared $(LOCAL_LDFLAGS)
 
 
 ###############################################################################
