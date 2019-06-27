@@ -4,13 +4,15 @@
 #include <malloc.h>
 #include <sys/inotify.h>
 #include "RK_AudioInterface.h"
+#include <unistd.h>
+
 
 /*****************************************************************************/
 
 #include "ladspa.h"
 /*****************************************************************************/
 
-#define VERSION "EQ/DRC Algorithm V1.0 2019-02-01 by Cherry.Chen"
+#define VERSION "EQ/DRC Algorithm V1.1 2019-06-27"
 #define PRINT_LOG 1
 #define DEBUG_LOG 0
 /*****************************************************************************/
@@ -25,7 +27,7 @@
 
 /************ EQ_DRC param debug**********/
 #define EQ_DRC_PARAM_DEBUG_ 1
-//#define DEBUG_ 0
+// #define DEBUG_ 1
 
 /*****************************************************************************/
 
@@ -57,7 +59,7 @@ typedef struct {
 static char* rk_itoa(int val, char* dst, int radix)
 {
 	char *_pdst = dst;
-	if (!val) 
+	if (!val)
 	{
 		*_pdst = '0';
 		*++_pdst = '\0';
@@ -98,7 +100,7 @@ static char* rk_itoa(int val, char* dst, int radix)
 #if DEBUG_LOG
 	#define LOG_DEBUG(format, args...)	printf(format, ## args)
 #else
-    #define LOG_DEBUG(format, args...)  
+    #define LOG_DEBUG(format, args...)
 #endif
 
 
@@ -124,7 +126,7 @@ activateEqualizer(LADSPA_Handle Instance) {
 
   Equalizer * psEqualizer;
   psEqualizer = (Equalizer *)Instance;
-  
+
   psEqualizer->m_eqfirstRun = 0;
   #ifdef DEBUG_
   psEqualizer->fp_in = fopen("/tmp/eq_in.pcm","wb");
@@ -138,7 +140,7 @@ activateEqualizer(LADSPA_Handle Instance) {
 
 
 /* Connect a port to a data location. */
-void 
+void
 connectPortToEqualizer(LADSPA_Handle Instance,
 		       unsigned long Port,
 		       LADSPA_Data * DataLocation) {
@@ -171,7 +173,7 @@ connectPortToEqualizer(LADSPA_Handle Instance,
 
 /*****************************************************************************/
 
-void 
+void
 runMonoEqualizer(LADSPA_Handle Instance,
 		 unsigned long SampleCount) {
   LADSPA_Data * pfInput;
@@ -187,7 +189,7 @@ runMonoEqualizer(LADSPA_Handle Instance,
   float reset_para[PARALEN] = {0};
   FILE *fp = NULL;
   FILE *binFile = NULL;
-  
+
 
   psEqualizer = (Equalizer *)Instance;
 
@@ -238,7 +240,7 @@ if(psEqualizer->m_eqfirstRun == 0)
 }
 /**************************process*********************************/
 
-for (lSampleIndex = 0; lSampleIndex <2 * SampleCount; lSampleIndex = lSampleIndex + 2) 
+for (lSampleIndex = 0; lSampleIndex <2 * SampleCount; lSampleIndex = lSampleIndex + 2)
 {
     pfInput[lSampleIndex] = pfInput[lSampleIndex] * 32767.0;
 }
@@ -249,7 +251,7 @@ for (lSampleIndex = 0; lSampleIndex <2 * SampleCount; lSampleIndex = lSampleInde
  fwrite(pfOutput,sizeof(LADSPA_Data),SampleCount,psEqualizer->fp_out);
 #endif
 
-for (lSampleIndex = 0; lSampleIndex <2 * SampleCount; lSampleIndex = lSampleIndex + 2) 
+for (lSampleIndex = 0; lSampleIndex <2 * SampleCount; lSampleIndex = lSampleIndex + 2)
   {
       pfOutput[lSampleIndex] = pfOutput[lSampleIndex] / 32767.0;
   }
@@ -257,14 +259,14 @@ for (lSampleIndex = 0; lSampleIndex <2 * SampleCount; lSampleIndex = lSampleInde
 
   /*momitor bin-file was change only debug*/
 #ifdef EQ_DRC_PARAM_DEBUG_
-   /*adding the "/data/rpc-d/" directory into watch list. 
+   /*adding the "/data/rpc-d/" directory into watch list.
     *Here, the suggestion is to validate the existence of
     *the directory before adding into monitoring list.
     */
     psEqualizer->wd = inotify_add_watch( psEqualizer->fd, psEqualizer->filename,IN_MODIFY |IN_ACCESS | IN_CREATE | IN_DELETE | IN_OPEN | IN_CLOSE_NOWRITE);
     LOG_DEBUG("psEqualizer->wd = %d,fd = %d\n",psEqualizer->wd,psEqualizer->fd);
     LOG_DEBUG("filename = %s\n",psEqualizer->filename);
-    
+
     if(psEqualizer->wd == IN_MODIFY)//IN_MODIFY
     {
         LOG_DEBUG("file was changed :wd = %d ",psEqualizer->wd);
@@ -281,9 +283,10 @@ for (lSampleIndex = 0; lSampleIndex <2 * SampleCount; lSampleIndex = lSampleInde
         }
         fclose(fp);
         inotify_rm_watch (psEqualizer->fd, psEqualizer->wd);
+        close(psEqualizer->fd);
         psEqualizer->fd = inotify_init();
     }
-  
+
 #endif
 
 /***********************this part must be changed*****/
@@ -294,7 +297,7 @@ for (lSampleIndex = 0; lSampleIndex <2 * SampleCount; lSampleIndex = lSampleInde
 /*****************************************************************************/
 
 void runStereoEqualizer(LADSPA_Handle Instance,
-		   unsigned long SampleCount) 
+		   unsigned long SampleCount)
 {
     LADSPA_Data * pfInput;
     LADSPA_Data * pfOutput;
@@ -354,7 +357,7 @@ void runStereoEqualizer(LADSPA_Handle Instance,
     memset(pfInput,0.0,2 * SampleCount);
     pfOutput = (LADSPA_Data *)malloc(2 * SampleCount * sizeof(LADSPA_Data));
     memset(pfOutput,0.0,2 * SampleCount);
-    for (lSampleIndex = 0; lSampleIndex <2 * SampleCount; lSampleIndex = lSampleIndex + 2) 
+    for (lSampleIndex = 0; lSampleIndex <2 * SampleCount; lSampleIndex = lSampleIndex + 2)
     {
     #if 0
         printf("*(pfInput) = %f\n",*(pfInput));
@@ -386,7 +389,7 @@ void runStereoEqualizer(LADSPA_Handle Instance,
     }
 
 #ifdef DEBUG_
-    for (lSampleIndex = 0; lSampleIndex <2 * SampleCount; lSampleIndex = lSampleIndex + 2) 
+    for (lSampleIndex = 0; lSampleIndex <2 * SampleCount; lSampleIndex = lSampleIndex + 2)
     {
         pfInput[lSampleIndex] = pfInput[lSampleIndex] / 32767.0;
         pfInput[lSampleIndex + 1] = pfInput[lSampleIndex +1] / 32767.0;
@@ -394,20 +397,20 @@ void runStereoEqualizer(LADSPA_Handle Instance,
         pfOutput[lSampleIndex + 1] = pfOutput[lSampleIndex + 1] / 32767.0;
         LOG_DEBUG("*(pfInput) = %f %f\n",(pfInput[lSampleIndex]),pfInput[lSampleIndex + 1]);
     }
- 
+
     fwrite(pfInput,sizeof(LADSPA_Data),2*SampleCount,psEqualizer->fp_in);
     fwrite(pfOutput,sizeof(LADSPA_Data),2*SampleCount,psEqualizer->fp_out);
 #endif
 
 #ifdef EQ_DRC_PARAM_DEBUG_
-   /*adding the "/data/rpc-d/" directory into watch list. 
+   /*adding the "/data/rpc-d/" directory into watch list.
     *Here, the suggestion is to validate the existence of
     *the directory before adding into monitoring list.
     */
     psEqualizer->wd = inotify_add_watch( psEqualizer->fd, psEqualizer->filename,IN_MODIFY |IN_ACCESS | IN_CREATE | IN_DELETE | IN_OPEN | IN_CLOSE_NOWRITE);
     LOG_DEBUG("psEqualizer->wd = %d,fd = %d\n",psEqualizer->wd,psEqualizer->fd);
     LOG_DEBUG("filename = %s\n",psEqualizer->filename);
-    
+
     if(psEqualizer->wd == IN_MODIFY)
     {
         LOG_DEBUG("file was changed :wd = %d ",psEqualizer->wd);
@@ -418,26 +421,33 @@ void runStereoEqualizer(LADSPA_Handle Instance,
             AudioPost_SetPara(reset_para, SampleCount);//EQ_DRC param reset
             LOG("modified the param succedd!!!\n");
         }
-        else{
+        else {
             LOG("ERROR:OPNE NEW BIN FILE FAILED!!!\n");
             return;
         }
         fclose(fp);
+        #if 1
+        LOG_DEBUG("PRE,psEqualizer->wd = %d,fd = %d\n",psEqualizer->wd,psEqualizer->fd);
         inotify_rm_watch (psEqualizer->fd, psEqualizer->wd);//删除监视
+        close(psEqualizer->fd);
         psEqualizer->fd = inotify_init();//重新初始化监视
+        LOG_DEBUG("psEqualizer->wd = %d,fd = %d\n",psEqualizer->wd,psEqualizer->fd);
+
+        #endif
+
     }
-       
+
 #endif
 
 
 #if 0
     pfInput = psEqualizer->m_leftInputBuffer;
     pfOutput = psEqualizer->m_leftOutputBuffer;
-    for (lSampleIndex = 0; lSampleIndex < SampleCount; lSampleIndex++) 
+    for (lSampleIndex = 0; lSampleIndex < SampleCount; lSampleIndex++)
         *(pfOutput++) = *(pfInput++);//demo原样输出
     pfInput = psEqualizer->m_rightInputBuffer;
     pfOutput = psEqualizer->m_rightOutputBuffer;
-    for (lSampleIndex = 0; lSampleIndex < SampleCount; lSampleIndex++) 
+    for (lSampleIndex = 0; lSampleIndex < SampleCount; lSampleIndex++)
         *(pfOutput++) = *(pfInput++);
 #endif
     free(pfInput);
@@ -462,6 +472,7 @@ void cleanupEqualizer(LADSPA_Handle Instance) {
 
 #ifdef EQ_DRC_PARAM_DEBUG_
     inotify_rm_watch (psEqualizer->fd, psEqualizer->wd);
+    close(psEqualizer->fd);
 #endif
 
     if(psEqualizer->m_eqfirstRun == 1)
@@ -479,7 +490,7 @@ LADSPA_Descriptor * g_eqStereoDescriptor = NULL;
 
 /*****************************************************************************/
 /* _init() is called automatically when the plugin library is first loaded. */
-void 
+void
 _init() {
     char ** pcPortNames;
     LADSPA_PortDescriptor * piPortDescriptors;
@@ -507,7 +518,7 @@ _init() {
         psPortRangeHints = ((LADSPA_PortRangeHint *)calloc(3, sizeof(LADSPA_PortRangeHint)));
         g_eqMonoDescriptor->PortRangeHints = (const LADSPA_PortRangeHint *)psPortRangeHints;
         psPortRangeHints[EQ_DRC_CONTROL].HintDescriptor
-            = (LADSPA_HINT_BOUNDED_BELOW 
+            = (LADSPA_HINT_BOUNDED_BELOW
 	        | LADSPA_HINT_LOGARITHMIC
 	        | LADSPA_HINT_DEFAULT_1);
         psPortRangeHints[EQ_DRC_CONTROL].LowerBound = 0;
@@ -522,7 +533,7 @@ _init() {
         g_eqMonoDescriptor->deactivate = NULL;
         g_eqMonoDescriptor->cleanup = cleanupEqualizer;
   }
-  
+
     if (g_eqStereoDescriptor) {
         g_eqStereoDescriptor->UniqueID = 1061;
         g_eqStereoDescriptor->Label = strdup("eq_drc_stereo");
@@ -567,7 +578,7 @@ _init() {
 
 /*****************************************************************************/
 
-void deleteDescriptor(LADSPA_Descriptor * psDescriptor) 
+void deleteDescriptor(LADSPA_Descriptor * psDescriptor)
 {
     unsigned long lIndex;
     if (psDescriptor) {
@@ -588,7 +599,7 @@ void deleteDescriptor(LADSPA_Descriptor * psDescriptor)
 /*****************************************************************************/
 
 /* _fini() is called automatically when the library is unloaded. */
-void _fini() 
+void _fini()
 {
     deleteDescriptor(g_eqMonoDescriptor);
     deleteDescriptor(g_eqStereoDescriptor);
@@ -597,7 +608,7 @@ void _fini()
 /*****************************************************************************/
 /* Return a descriptor of the requested plugin type. There are two
    plugin types available in this library (mono and stereo). */
-const LADSPA_Descriptor * ladspa_descriptor(unsigned long Index) 
+const LADSPA_Descriptor * ladspa_descriptor(unsigned long Index)
 {
     /* Return the requested descriptor or null if the index is out of
     range. */
