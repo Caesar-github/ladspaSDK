@@ -12,7 +12,7 @@
 #include "ladspa.h"
 /*****************************************************************************/
 
-#define VERSION "EQ/DRC Algorithm V1.1 2019-06-27"
+#define VERSION "EQ/DRC Algorithm V1.1 2019-07-28"
 #define PRINT_LOG 1
 #define DEBUG_LOG 0
 /*****************************************************************************/
@@ -35,6 +35,7 @@
 typedef struct {
     unsigned int m_eqfirstRun;
     unsigned int m_eqsampleRate;
+    int last_frame_count ;
 
     /*************connect port*****************/
     LADSPA_Data * m_pfControlValue;
@@ -53,6 +54,7 @@ typedef struct {
     FILE *fp_in;
     FILE *fp_out;
 #endif
+    struct AUDIOPOST_STRUCT *AudioPostHandle;
 } Equalizer;
 
 /***************rk define*******************/
@@ -114,6 +116,12 @@ LADSPA_Handle instantiateEqualizer(const LADSPA_Descriptor * Descriptor,
   LOG("%s \n",VERSION);
   psEqualizer = (Equalizer *)malloc(sizeof(Equalizer));
   psEqualizer->m_eqsampleRate = (unsigned int)SampleRate;
+  psEqualizer->AudioPostHandle = NULL;
+  psEqualizer ->last_frame_count = 0;
+
+  const char * Version = AudioPost_GetVersion();
+  LOG("%s \n",Version);
+
 
   return psEqualizer;
 }
@@ -151,7 +159,7 @@ connectPortToEqualizer(LADSPA_Handle Instance,
   switch (Port) {
   case EQ_DRC_CONTROL:
     psEqualizer->m_pfControlValue = DataLocation;
-    LOG_DEBUG("psEqualizer->m_pfControlValue = %f\n",psEqualizer->m_pfControlValue);
+    LOG("psEqualizer->m_pfControlValue = %f\n",*psEqualizer->m_pfControlValue);
     break;
   case EQ_DRC_INPUT1:
     psEqualizer->m_leftInputBuffer = DataLocation;
@@ -190,9 +198,12 @@ runMonoEqualizer(LADSPA_Handle Instance,
   FILE *fp = NULL;
   FILE *binFile = NULL;
 
+  int paramIndex ;
+
 
   psEqualizer = (Equalizer *)Instance;
 
+  paramIndex = (int) *psEqualizer->m_pfControlValue;
   pfInput = psEqualizer->m_leftInputBuffer;
   pfOutput = psEqualizer->m_leftOutputBuffer;
 
@@ -206,8 +217,7 @@ if(psEqualizer->m_eqfirstRun == 0)
         &&(samplerate != 16000) && (samplerate != 8000))
     {
         LOG("Unsupport samplerate!\n");
-       // return ;
-       exit(1);
+        exit(1);
     }
 
     strcpy(param_name,"/data/cfg/eq_bin/Para_");
@@ -216,6 +226,36 @@ if(psEqualizer->m_eqfirstRun == 0)
 	strcat(param_name,"Hz_1ch.bin");
     LOG("para_name  = %s\n",param_name);
 
+
+    if((paramIndex > 0) && (paramIndex <=5)) {
+            char *binNameStr = strrchr(param_name,'.');
+            char addNum[1];
+            char binName[256] = {0};
+            LOG_DEBUG("%s\n",binName);
+            strncpy(binName,param_name,(int)(strlen(param_name) - strlen(binNameStr)));
+            printf("binName = %s\n",binName);
+            strcat(binName,"_");
+            rk_itoa(paramIndex, addNum, 10);
+            strcat(binName,addNum);
+            strcat(binName,".bin");
+            LOG_DEBUG("binName = %s \n",binName);
+
+            binFile = fopen(binName,"rb");
+            if((binFile == NULL))
+            {
+                char bytesName[256] = {0};
+                snprintf(bytesName,256,"cp %s %s",param_name,binName);
+                LOG("%s\n",bytesName);
+                system(bytesName);
+                system("sync");
+                LOG("copy eq_bin...\n");
+            }
+            else {
+                fclose(binFile);
+            }
+    }
+
+    LOG("param_name = %s\n",param_name);
     binFile = fopen(param_name,"rb");
     if(binFile == NULL)
     {
@@ -228,8 +268,12 @@ if(psEqualizer->m_eqfirstRun == 0)
     }
 
 
-	AudioPost_Init(param_name, SampleCount);
-
+	psEqualizer->AudioPostHandle = AudioPost_Init(param_name, SampleCount);
+    if(psEqualizer->AudioPostHandle == NULL)
+    {
+        printf("Create Mono AudioPost Handle Fail.\n");
+        exit(1);
+    }
 	#ifdef EQ_DRC_PARAM_DEBUG_
     psEqualizer->filename = param_name;
     LOG_DEBUG("filename = %s\n",psEqualizer->filename);
@@ -245,7 +289,7 @@ for (lSampleIndex = 0; lSampleIndex <2 * SampleCount; lSampleIndex = lSampleInde
     pfInput[lSampleIndex] = pfInput[lSampleIndex] * 32767.0;
 }
 
-  AudioPost_Process(pfInput, pfOutput , pcm_channel, SampleCount);
+  AudioPost_Process(psEqualizer->AudioPostHandle,pfInput, pfOutput , pcm_channel, SampleCount);
 #ifdef DEBUG_
  fwrite(pfInput,sizeof(LADSPA_Data),SampleCount,psEqualizer->fp_in);
  fwrite(pfOutput,sizeof(LADSPA_Data),SampleCount,psEqualizer->fp_out);
@@ -274,7 +318,7 @@ for (lSampleIndex = 0; lSampleIndex <2 * SampleCount; lSampleIndex = lSampleInde
         if(fp != NULL)
         {
             fread(reset_para,sizeof(float),PARALEN,fp);
-            AudioPost_SetPara(reset_para, SampleCount);//EQ_DRC param reset
+            AudioPost_SetPara(psEqualizer->AudioPostHandle,reset_para, SampleCount);//EQ_DRC param reset
             LOG("modified the param succedd!!!\n");
         }
         else{
@@ -296,6 +340,7 @@ for (lSampleIndex = 0; lSampleIndex <2 * SampleCount; lSampleIndex = lSampleInde
 
 /*****************************************************************************/
 
+
 void runStereoEqualizer(LADSPA_Handle Instance,
 		   unsigned long SampleCount)
 {
@@ -311,7 +356,12 @@ void runStereoEqualizer(LADSPA_Handle Instance,
     FILE *fp = NULL;
     FILE *binFile = NULL;
 
+
+    int paramIndex ;//= (int)*psEqualizer->m_pfControlValue;
+
     psEqualizer = (Equalizer *)Instance;
+
+    paramIndex = (int)*psEqualizer->m_pfControlValue;
 /******************************init****************************/
 /* eq_drc init because the samplecount only be passed in this*/
 
@@ -325,14 +375,46 @@ void runStereoEqualizer(LADSPA_Handle Instance,
             LOG("Unsupport samplerate!\n");
             exit(1);
         }
-
+        // LOG("Fs = %d\n",samplerate);
         strcpy(param_name,"/data/cfg/eq_bin/Para_");
         rk_itoa(samplerate,samp_name,10);
         strcat(param_name,samp_name);
+        // strcat(param_name,"Hz_2ch");
 	    strcat(param_name,"Hz_2ch.bin");
-        LOG("para_name  = %s\n",param_name);
+        //LOG("para_name  = %s\n",param_name);
 
-        //detect eq_bin file
+        LOG_DEBUG("paramIndex = %d\n",paramIndex);
+        if((paramIndex > 0) && (paramIndex <=5)) {
+            char *binNameStr = strrchr(param_name,'.');
+            char addNum[1];
+            char binName[256] = {0};
+            LOG_DEBUG("%s\n",binName);
+            strncpy(binName,param_name,(int)(strlen(param_name) - strlen(binNameStr)));
+            printf("binName = %s\n",binName);
+            strcat(binName,"_");
+            rk_itoa(paramIndex, addNum, 10);
+            strcat(binName,addNum);
+            strcat(binName,".bin");
+            LOG_DEBUG("binName = %s \n",binName);
+
+            binFile = fopen(binName,"rb");
+            if((binFile == NULL))
+            {
+                char bytesName[256] = {0};
+                snprintf(bytesName,256,"cp %s %s",param_name,binName);
+                LOG("%s\n",bytesName);
+                system(bytesName);
+                system("sync");
+                LOG("copy eq_bin...\n");
+            }
+            else {
+                fclose(binFile);
+            }
+            strncpy(param_name,binName,strlen(binName));
+        }
+
+        // detect eq_bin file
+        LOG("param_name = %s\n",param_name);
         binFile = fopen(param_name,"rb");
         if((binFile == NULL))
         {
@@ -342,8 +424,13 @@ void runStereoEqualizer(LADSPA_Handle Instance,
         else {
             fclose(binFile);
         }
-        AudioPost_Init(param_name, SampleCount);
-
+        psEqualizer->AudioPostHandle = AudioPost_Init(param_name, SampleCount);
+        if(psEqualizer->AudioPostHandle == NULL)
+        {
+            LOG("Create audiopost handle fail...\n");
+            exit(1);
+        }
+         psEqualizer->last_frame_count = SampleCount;
     #ifdef EQ_DRC_PARAM_DEBUG_
         psEqualizer->filename = param_name;
         LOG_DEBUG("filename = %s\n",psEqualizer->filename);
@@ -372,9 +459,7 @@ void runStereoEqualizer(LADSPA_Handle Instance,
         LOG_DEBUG("*(pfInput) = %f %f\n",(pfInput[lSampleIndex]),pfInput[lSampleIndex + 1]);
     #endif
     }
-
-    AudioPost_Process(pfInput, pfOutput, pcm_channel, SampleCount);
-
+    AudioPost_Process(psEqualizer->AudioPostHandle,pfInput, pfOutput, pcm_channel, SampleCount);
     for (lSampleIndex = 0; lSampleIndex <2 * SampleCount; lSampleIndex = lSampleIndex + 2)
     {
     #if 0
@@ -418,7 +503,7 @@ void runStereoEqualizer(LADSPA_Handle Instance,
         if(fp != NULL)
         {
             fread(reset_para,sizeof(float),PARALEN,fp);
-            AudioPost_SetPara(reset_para, SampleCount);//EQ_DRC param reset
+            AudioPost_SetPara(psEqualizer->AudioPostHandle,reset_para, SampleCount);//EQ_DRC param reset
             LOG("modified the param succedd!!!\n");
         }
         else {
@@ -477,7 +562,7 @@ void cleanupEqualizer(LADSPA_Handle Instance) {
 
     if(psEqualizer->m_eqfirstRun == 1)
     {
-        AudioPost_Destroy();
+        AudioPost_Destroy(psEqualizer->AudioPostHandle);
         psEqualizer->m_eqfirstRun = 0;
     }
     free(Instance);
@@ -507,7 +592,7 @@ _init() {
         g_eqMonoDescriptor->PortCount = 3;
         piPortDescriptors = (LADSPA_PortDescriptor *)calloc(3, sizeof(LADSPA_PortDescriptor));
         g_eqMonoDescriptor->PortDescriptors = (const LADSPA_PortDescriptor *)piPortDescriptors;
-        piPortDescriptors[EQ_DRC_CONTROL] = LADSPA_PORT_INPUT | LADSPA_PORT_CONTROL;
+        piPortDescriptors[EQ_DRC_CONTROL] = LADSPA_PORT_CONTROL | LADSPA_PORT_INPUT;
         piPortDescriptors[EQ_DRC_INPUT1] = LADSPA_PORT_INPUT | LADSPA_PORT_AUDIO;
         piPortDescriptors[EQ_DRC_OUTPUT1]= LADSPA_PORT_OUTPUT | LADSPA_PORT_AUDIO;
         pcPortNames = (char **)calloc(3, sizeof(char *));
