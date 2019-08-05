@@ -502,6 +502,7 @@ void runStereoEqualizer(LADSPA_Handle Instance,
         fp = fopen(psEqualizer->filename,"rb");
         if(fp != NULL)
         {
+	    system("sync");
             fread(reset_para,sizeof(float),PARALEN,fp);
             AudioPost_SetPara(psEqualizer->AudioPostHandle,reset_para, SampleCount);//EQ_DRC param reset
             LOG("modified the param succedd!!!\n");
