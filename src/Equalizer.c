@@ -14,7 +14,7 @@
 
 #define VERSION "EQ/DRC Algorithm V1.1 2019-07-28"
 #define PRINT_LOG 1
-#define DEBUG_LOG 0
+#define DEBUG_LOG 1
 /*****************************************************************************/
 
 /* The port numbers for the plugin: */
@@ -118,6 +118,7 @@ LADSPA_Handle instantiateEqualizer(const LADSPA_Descriptor * Descriptor,
   psEqualizer->m_eqsampleRate = (unsigned int)SampleRate;
   psEqualizer->AudioPostHandle = NULL;
   psEqualizer ->last_frame_count = 0;
+  psEqualizer->fd = -1;
 
   const char * Version = AudioPost_GetVersion();
   LOG("%s \n",Version);
@@ -326,8 +327,11 @@ for (lSampleIndex = 0; lSampleIndex <2 * SampleCount; lSampleIndex = lSampleInde
             exit(1);
         }
         fclose(fp);
-        inotify_rm_watch (psEqualizer->fd, psEqualizer->wd);
-        close(psEqualizer->fd);
+        if(psEqualizer->fd >= 0) {
+            inotify_rm_watch (psEqualizer->fd, psEqualizer->wd);
+            close(psEqualizer->fd);
+            psEqualizer->fd = -1;
+        }
         psEqualizer->fd = inotify_init();
     }
 
@@ -355,13 +359,12 @@ void runStereoEqualizer(LADSPA_Handle Instance,
     float reset_para[PARALEN] = {0};
     FILE *fp = NULL;
     FILE *binFile = NULL;
-
-
-    int paramIndex ;//= (int)*psEqualizer->m_pfControlValue;
+    int paramIndex;
 
     psEqualizer = (Equalizer *)Instance;
 
     paramIndex = (int)*psEqualizer->m_pfControlValue;
+    
 /******************************init****************************/
 /* eq_drc init because the samplecount only be passed in this*/
 
@@ -375,13 +378,10 @@ void runStereoEqualizer(LADSPA_Handle Instance,
             LOG("Unsupport samplerate!\n");
             exit(1);
         }
-        // LOG("Fs = %d\n",samplerate);
         strcpy(param_name,"/data/cfg/eq_bin/Para_");
         rk_itoa(samplerate,samp_name,10);
         strcat(param_name,samp_name);
-        // strcat(param_name,"Hz_2ch");
 	    strcat(param_name,"Hz_2ch.bin");
-        //LOG("para_name  = %s\n",param_name);
 
         LOG_DEBUG("paramIndex = %d\n",paramIndex);
         if((paramIndex > 0) && (paramIndex <=5)) {
@@ -431,6 +431,7 @@ void runStereoEqualizer(LADSPA_Handle Instance,
             exit(1);
         }
          psEqualizer->last_frame_count = SampleCount;
+         
     #ifdef EQ_DRC_PARAM_DEBUG_
         psEqualizer->filename = param_name;
         LOG_DEBUG("filename = %s\n",psEqualizer->filename);
@@ -438,7 +439,6 @@ void runStereoEqualizer(LADSPA_Handle Instance,
 	    LOG_DEBUG("psEqualizer->fd = %d\n",psEqualizer->fd);
     #endif
     }
-
 /***********************this part must be changed**********/
     pfInput = (LADSPA_Data *)malloc(2 * SampleCount * sizeof(LADSPA_Data));
     memset(pfInput,0.0,2 * SampleCount);
@@ -456,7 +456,7 @@ void runStereoEqualizer(LADSPA_Handle Instance,
     #else
         pfInput[lSampleIndex] = psEqualizer->m_leftInputBuffer[lSampleIndex/2] * 32767.0;
         pfInput[lSampleIndex + 1] = psEqualizer->m_rightInputBuffer[lSampleIndex/2] * 32767.0;
-        LOG_DEBUG("*(pfInput) = %f %f\n",(pfInput[lSampleIndex]),pfInput[lSampleIndex + 1]);
+       // LOG_DEBUG("*(pfInput) = %f %f\n",(pfInput[lSampleIndex]),pfInput[lSampleIndex + 1]);
     #endif
     }
     AudioPost_Process(psEqualizer->AudioPostHandle,pfInput, pfOutput, pcm_channel, SampleCount);
@@ -480,7 +480,7 @@ void runStereoEqualizer(LADSPA_Handle Instance,
         pfInput[lSampleIndex + 1] = pfInput[lSampleIndex +1] / 32767.0;
         pfOutput[lSampleIndex] = pfOutput[lSampleIndex] / 32767.0;
         pfOutput[lSampleIndex + 1] = pfOutput[lSampleIndex + 1] / 32767.0;
-        LOG_DEBUG("*(pfInput) = %f %f\n",(pfInput[lSampleIndex]),pfInput[lSampleIndex + 1]);
+       // LOG_DEBUG("*(pfInput) = %f %f\n",(pfInput[lSampleIndex]),pfInput[lSampleIndex + 1]);
     }
 
     fwrite(pfInput,sizeof(LADSPA_Data),2*SampleCount,psEqualizer->fp_in);
@@ -493,16 +493,16 @@ void runStereoEqualizer(LADSPA_Handle Instance,
     *the directory before adding into monitoring list.
     */
     psEqualizer->wd = inotify_add_watch( psEqualizer->fd, psEqualizer->filename,IN_MODIFY |IN_ACCESS | IN_CREATE | IN_DELETE | IN_OPEN | IN_CLOSE_NOWRITE);
-    LOG_DEBUG("psEqualizer->wd = %d,fd = %d\n",psEqualizer->wd,psEqualizer->fd);
-    LOG_DEBUG("filename = %s\n",psEqualizer->filename);
+    // LOG_DEBUG("psEqualizer->wd = %d,fd = %d\n",psEqualizer->wd,psEqualizer->fd);
+    // LOG_DEBUG("filename = %s\n",psEqualizer->filename);
 
     if(psEqualizer->wd == IN_MODIFY)
     {
         LOG_DEBUG("file was changed :wd = %d ",psEqualizer->wd);
+        system("sync");
         fp = fopen(psEqualizer->filename,"rb");
         if(fp != NULL)
         {
-	    system("sync");
             fread(reset_para,sizeof(float),PARALEN,fp);
             AudioPost_SetPara(psEqualizer->AudioPostHandle,reset_para, SampleCount);//EQ_DRC param reset
             LOG("modified the param succedd!!!\n");
@@ -514,8 +514,11 @@ void runStereoEqualizer(LADSPA_Handle Instance,
         fclose(fp);
         #if 1
         LOG_DEBUG("PRE,psEqualizer->wd = %d,fd = %d\n",psEqualizer->wd,psEqualizer->fd);
-        inotify_rm_watch (psEqualizer->fd, psEqualizer->wd);//删除监视
-        close(psEqualizer->fd);
+        if(psEqualizer->fd >= 0) {
+            inotify_rm_watch (psEqualizer->fd, psEqualizer->wd);//删除监视
+            close(psEqualizer->fd);
+            psEqualizer->fd = -1;
+        }
         psEqualizer->fd = inotify_init();//重新初始化监视
         LOG_DEBUG("psEqualizer->wd = %d,fd = %d\n",psEqualizer->wd,psEqualizer->fd);
 
@@ -557,8 +560,11 @@ void cleanupEqualizer(LADSPA_Handle Instance) {
 #endif
 
 #ifdef EQ_DRC_PARAM_DEBUG_
-    inotify_rm_watch (psEqualizer->fd, psEqualizer->wd);
-    close(psEqualizer->fd);
+    if(psEqualizer->fd >= 0) {
+        inotify_rm_watch (psEqualizer->fd, psEqualizer->wd);
+        close(psEqualizer->fd);
+        psEqualizer->fd = -1;
+    }
 #endif
 
     if(psEqualizer->m_eqfirstRun == 1)
@@ -630,7 +636,7 @@ _init() {
         g_eqStereoDescriptor->PortCount = 5;
         piPortDescriptors = (LADSPA_PortDescriptor *)calloc(5, sizeof(LADSPA_PortDescriptor));
         g_eqStereoDescriptor->PortDescriptors = (const LADSPA_PortDescriptor *)piPortDescriptors;
-        piPortDescriptors[EQ_DRC_CONTROL] = LADSPA_PORT_INPUT | LADSPA_PORT_CONTROL;
+        piPortDescriptors[EQ_DRC_CONTROL] = LADSPA_PORT_INPUT |LADSPA_PORT_CONTROL;
         piPortDescriptors[EQ_DRC_INPUT1] = LADSPA_PORT_INPUT | LADSPA_PORT_AUDIO;
         piPortDescriptors[EQ_DRC_OUTPUT1] = LADSPA_PORT_OUTPUT | LADSPA_PORT_AUDIO;
         piPortDescriptors[EQ_DRC_INPUT2] = LADSPA_PORT_INPUT | LADSPA_PORT_AUDIO;
@@ -709,5 +715,3 @@ const LADSPA_Descriptor * ladspa_descriptor(unsigned long Index)
 }
 
 /*****************************************************************************/
-
-
