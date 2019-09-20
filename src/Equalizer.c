@@ -14,7 +14,7 @@
 
 #define VERSION "EQ/DRC Algorithm V1.1 2019-07-28"
 #define PRINT_LOG 1
-#define DEBUG_LOG 1
+#define DEBUG_LOG 0
 /*****************************************************************************/
 
 /* The port numbers for the plugin: */
@@ -113,7 +113,7 @@ LADSPA_Handle instantiateEqualizer(const LADSPA_Descriptor * Descriptor,
 		     unsigned long             SampleRate) {
   Equalizer * psEqualizer;
 
-  LOG("%s \n",VERSION);
+  // LiOG("%s \n",VERSION);
   psEqualizer = (Equalizer *)malloc(sizeof(Equalizer));
   psEqualizer->m_eqsampleRate = (unsigned int)SampleRate;
   psEqualizer->AudioPostHandle = NULL;
@@ -122,7 +122,7 @@ LADSPA_Handle instantiateEqualizer(const LADSPA_Descriptor * Descriptor,
 
   const char * Version = AudioPost_GetVersion();
   LOG("%s \n",Version);
-
+  free(Version);
 
   return psEqualizer;
 }
