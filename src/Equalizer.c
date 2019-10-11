@@ -190,7 +190,7 @@ runMonoEqualizer(LADSPA_Handle Instance,
   Equalizer * psEqualizer;
   unsigned long lSampleIndex;
 
-  static char param_name[100] = "/data/cfg/eq_bin/Para_";//"/data/Para.bin";
+  char param_name[100] = "/data/cfg/eq_bin/Para_";//"/data/Para.bin";
   char samp_name[10];
   unsigned int samplerate;
   int pcm_channel = 1;
@@ -352,7 +352,7 @@ void runStereoEqualizer(LADSPA_Handle Instance,
     LADSPA_Data * pfOutput;
     Equalizer * psEqualizer;
     unsigned long lSampleIndex;
-    static char param_name[100] =  "/data/cfg/eq_bin/Para_";
+    char param_name[100] =  "/data/cfg/eq_bin/Para_";
     char samp_name[10];
     unsigned int samplerate;
     int pcm_channel = 2;
