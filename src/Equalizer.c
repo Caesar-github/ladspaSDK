@@ -418,7 +418,8 @@ void runStereoEqualizer(LADSPA_Handle Instance,
         binFile = fopen(param_name,"rb");
         if((binFile == NULL))
         {
-            system("cp /usr/lib/eq_bin/ /data/cfg/ -rf");
+	    system("cp /usr/lib/eq_bin/ /data/cfg/ -rf");
+	    system("sync");
             LOG("copy eq_bin...\n");
         }
         else {
