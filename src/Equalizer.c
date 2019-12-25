@@ -27,7 +27,13 @@
 
 /************ EQ_DRC param debug**********/
 #define EQ_DRC_PARAM_DEBUG_ 1
-// #define DEBUG_ 1
+//#define DEBUG_ 1
+#define MAX_RECORD_SIZE 4 * 1024 * 1024
+
+#ifdef DEBUG_
+FILE *fp_in;
+FILE *fp_out;
+#endif
 
 /*****************************************************************************/
 
@@ -50,10 +56,6 @@ typedef struct {
     int wd;
 #endif
 
-#ifdef DEBUG_
-    FILE *fp_in;
-    FILE *fp_out;
-#endif
     struct AUDIOPOST_STRUCT *AudioPostHandle;
 } Equalizer;
 
@@ -137,11 +139,6 @@ activateEqualizer(LADSPA_Handle Instance) {
   psEqualizer = (Equalizer *)Instance;
 
   psEqualizer->m_eqfirstRun = 0;
-  #ifdef DEBUG_
-  psEqualizer->fp_in = fopen("/tmp/eq_in.pcm","wb");
-  psEqualizer->fp_out = fopen("/tmp/eq_out.pcm","wb");
-  #endif
-
 }
 
 
@@ -292,8 +289,13 @@ for (lSampleIndex = 0; lSampleIndex <2 * SampleCount; lSampleIndex = lSampleInde
 
   AudioPost_Process(psEqualizer->AudioPostHandle,pfInput, pfOutput , pcm_channel, SampleCount);
 #ifdef DEBUG_
- fwrite(pfInput,sizeof(LADSPA_Data),SampleCount,psEqualizer->fp_in);
- fwrite(pfOutput,sizeof(LADSPA_Data),SampleCount,psEqualizer->fp_out);
+
+ if (ftell(fp_in) > MAX_RECORD_SIZE) {
+   fseek(fp_in,0L,SEEK_SET);
+   fseek(fp_out,0L,SEEK_SET);
+ }
+ fwrite(pfInput,sizeof(LADSPA_Data),SampleCount,fp_in);
+ fwrite(pfOutput,sizeof(LADSPA_Data),SampleCount,fp_out);
 #endif
 
 for (lSampleIndex = 0; lSampleIndex <2 * SampleCount; lSampleIndex = lSampleIndex + 2)
@@ -484,8 +486,12 @@ void runStereoEqualizer(LADSPA_Handle Instance,
        // LOG_DEBUG("*(pfInput) = %f %f\n",(pfInput[lSampleIndex]),pfInput[lSampleIndex + 1]);
     }
 
-    fwrite(pfInput,sizeof(LADSPA_Data),2*SampleCount,psEqualizer->fp_in);
-    fwrite(pfOutput,sizeof(LADSPA_Data),2*SampleCount,psEqualizer->fp_out);
+    if (ftell(fp_in) > MAX_RECORD_SIZE) {
+        fseek(fp_in,0L,SEEK_SET);
+        fseek(fp_out,0L,SEEK_SET);
+    }
+    fwrite(pfInput,sizeof(LADSPA_Data),2*SampleCount,fp_in);
+    fwrite(pfOutput,sizeof(LADSPA_Data),2*SampleCount,fp_out);
 #endif
 
 #ifdef EQ_DRC_PARAM_DEBUG_
@@ -555,11 +561,6 @@ void cleanupEqualizer(LADSPA_Handle Instance) {
     Equalizer * psEqualizer;
     psEqualizer = (Equalizer *)Instance;
 
-#ifdef DEBUG_
-    fclose(psEqualizer->fp_in);
-    fclose(psEqualizer->fp_out);
-#endif
-
 #ifdef EQ_DRC_PARAM_DEBUG_
     if(psEqualizer->fd >= 0) {
         inotify_rm_watch (psEqualizer->fd, psEqualizer->wd);
@@ -590,6 +591,10 @@ _init() {
     LADSPA_PortRangeHint * psPortRangeHints;
     g_eqMonoDescriptor = (LADSPA_Descriptor *)malloc(sizeof(LADSPA_Descriptor));
     g_eqStereoDescriptor = (LADSPA_Descriptor *)malloc(sizeof(LADSPA_Descriptor));
+#ifdef DEBUG_
+    fp_in = fopen("/tmp/eq_in.pcm","wb");
+    fp_out = fopen("/tmp/eq_out.pcm","wb");
+#endif
     if (g_eqMonoDescriptor) {
         g_eqMonoDescriptor->UniqueID = 1060;
         g_eqMonoDescriptor->Label = strdup("eq_drc_mono");
@@ -694,6 +699,10 @@ void deleteDescriptor(LADSPA_Descriptor * psDescriptor)
 /* _fini() is called automatically when the library is unloaded. */
 void _fini()
 {
+#ifdef DEBUG_
+	fclose(fp_in);
+	fclose(fp_out);
+#endif
     deleteDescriptor(g_eqMonoDescriptor);
     deleteDescriptor(g_eqStereoDescriptor);
 }
